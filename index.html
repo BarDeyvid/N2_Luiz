@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Posts</title>
+    <title>Gerenciador de Posts e Usuários</title>
     <style>
         :root {
             --primary: #4f46e5;
@@ -13,18 +13,21 @@
             --bg: #f8fafc;
             --card: #ffffff;
             --text: #1e293b;
+            --secondary: #0891b2;
+            --secondary-hover: #0e7490;
         }
 
         body {
             font-family: system-ui, -apple-system, sans-serif;
             background-color: var(--bg);
             color: var(--text);
-            max-width: 600px;
+            max-width: 700px;
             margin: 2rem auto;
             padding: 0 1rem;
         }
 
         h1 { text-align: center; color: var(--primary); }
+        h2 { color: var(--secondary); border-bottom: 2px solid var(--secondary); padding-bottom: 0.5rem; }
 
         .input-group {
             display: flex;
@@ -49,9 +52,9 @@
             transition: background 0.2s;
         }
 
-        .btn-add { background: var(--primary); color: white; }
+        .btn-add    { background: var(--primary); color: white; }
         .btn-add:hover { background: var(--primary-hover); }
-        .btn-edit { background: #e2e8f0; color: var(--text); }
+        .btn-edit   { background: #e2e8f0; color: var(--text); }
         .btn-edit:hover { background: #cbd5e1; }
         .btn-delete { background: var(--danger); color: white; }
         .btn-delete:hover { background: var(--danger-hover); }
@@ -72,22 +75,90 @@
 
         .item-text { flex: 1; }
         .actions { display: flex; gap: 0.25rem; }
-        .edit-input { flex: 1; }
+        .edit-input { flex: 1; padding: 0.25rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.6rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: #e2e8f0;
+            color: var(--text);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* User card */
+        .user-card {
+            background: var(--card);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .user-card strong { color: var(--secondary); }
+        .user-card p { margin: 0.2rem 0; font-size: 0.9rem; color: #475569; }
+
+        .badge {
+            display: inline-block;
+            background: #e0f2fe;
+            color: var(--secondary);
+            border-radius: 999px;
+            padding: 0.1rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .loading {
+            text-align: center;
+            color: #94a3b8;
+            padding: 1rem;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Gerenciador de Posts</h1>
+    <h1>Gerenciador de Posts e Usuários</h1>
     <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem;">
         Integrantes: Deyvid Barcelos, Nathalia Bruch Machado dos Santos e Yann Felipe Bastos
     </p>
-    
+
     <div id="app">
-        <div class="input-group">
-            <input type="text" id="new-item" placeholder="Digite um novo título...">
-            <button id="add-item" class="btn-add">Adicionar</button>
+        <!-- Tabs de navegação -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="posts">📄 Posts</button>
+            <button class="tab-btn" data-tab="users">👥 Usuários</button>
         </div>
-        <ul id="item-list"></ul>
+
+        <!-- Tab Posts -->
+        <div id="tab-posts" class="tab-content active">
+            <h2>Posts</h2>
+            <div class="input-group">
+                <input type="text" id="new-item" placeholder="Digite um novo título...">
+                <button id="add-item" class="btn-add">Adicionar</button>
+            </div>
+            <ul id="item-list"><li class="loading">Carregando posts...</li></ul>
+        </div>
+
+        <!-- Tab Usuários -->
+        <div id="tab-users" class="tab-content">
+            <h2>Usuários</h2>
+            <div id="user-list"><p class="loading">Carregando usuários...</p></div>
+        </div>
     </div>
 
     <script>
@@ -100,21 +171,20 @@
                     const response = await fetch(this.apiUrl);
                     if (!response.ok) throw new Error('Erro na requisição');
                     const data = await response.json();
-                    
                     this.items = data.slice(0, 10).map(post => ({
                         id: post.id,
                         title: post.title,
-                        isEditing: false 
+                        isEditing: false
                     }));
                 } catch (error) {
-                    console.error('Erro ao buscar itens:', error);
-                    alert('Não foi possível carregar os dados da API.');
+                    console.error('Erro ao buscar posts:', error);
+                    alert('Não foi possível carregar os posts da API.');
                 }
             },
 
             addItem(title) {
                 const newItem = { id: Date.now(), title, isEditing: false };
-                this.items.unshift(newItem); 
+                this.items.unshift(newItem);
             },
 
             removeItem(id) {
@@ -135,22 +205,32 @@
             }
         };
 
-        const DOMView = {
+        const UserService = {
+            apiUrl: 'https://jsonplaceholder.typicode.com/users',
+            users: [],
+
+            async fetchUsers() {
+                try {
+                    const response = await fetch(this.apiUrl);
+                    if (!response.ok) throw new Error('Erro na requisição');
+                    this.users = await response.json();
+                } catch (error) {
+                    console.error('Erro ao buscar usuários:', error);
+                    alert('Não foi possível carregar os usuários da API.');
+                }
+            }
+        };
+
+        const PostView = {
             listElement: document.getElementById('item-list'),
             inputElement: document.getElementById('new-item'),
             addButton: document.getElementById('add-item'),
 
-            getInputValue() {
-                return this.inputElement.value.trim();
-            },
-
-            clearInput() {
-                this.inputElement.value = '';
-            },
+            getInputValue() { return this.inputElement.value.trim(); },
+            clearInput()    { this.inputElement.value = ''; },
 
             render(items, actions) {
                 this.listElement.innerHTML = '';
-
                 items.forEach(item => {
                     const li = document.createElement('li');
 
@@ -162,9 +242,8 @@
                                 <button class="btn-edit cancel-btn">Cancelar</button>
                             </div>
                         `;
-
                         const input = li.querySelector('.edit-input');
-                        li.querySelector('.save-btn').onclick = () => actions.onSave(item.id, input.value.trim());
+                        li.querySelector('.save-btn').onclick   = () => actions.onSave(item.id, input.value.trim());
                         li.querySelector('.cancel-btn').onclick = () => actions.onToggleEdit(item.id);
                     } else {
                         li.innerHTML = `
@@ -174,8 +253,7 @@
                                 <button class="btn-delete delete-btn">Remover</button>
                             </div>
                         `;
-
-                        li.querySelector('.edit-btn').onclick = () => actions.onToggleEdit(item.id);
+                        li.querySelector('.edit-btn').onclick   = () => actions.onToggleEdit(item.id);
                         li.querySelector('.delete-btn').onclick = () => actions.onDelete(item.id);
                     }
 
@@ -184,51 +262,83 @@
             }
         };
 
+        const UserView = {
+            container: document.getElementById('user-list'),
+
+            render(users) {
+                this.container.innerHTML = '';
+                users.forEach(user => {
+                    const card = document.createElement('div');
+                    card.className = 'user-card';
+                    card.innerHTML = `
+                        <span class="badge">ID ${user.id}</span>
+                        <strong>${user.name}</strong>
+                        <p>📧 ${user.email}</p>
+                        <p>📞 ${user.phone}</p>
+                        <p>🌐 ${user.website}</p>
+                        <p>🏢 ${user.company.name}</p>
+                    `;
+                    this.container.appendChild(card);
+                });
+            }
+        };
+
         const App = {
             viewActions: {
                 onDelete: (id) => {
                     PostService.removeItem(id);
-                    App.updateView();
+                    App.updatePostView();
                 },
                 onToggleEdit: (id) => {
                     PostService.toggleEditMode(id);
-                    App.updateView();
+                    App.updatePostView();
                 },
                 onSave: (id, newTitle) => {
                     if (!newTitle) return alert('O título não pode ser vazio!');
                     PostService.updateItemTitle(id, newTitle);
-                    App.updateView();
+                    App.updatePostView();
                 }
             },
 
-            init() {
-                this.setupEventListeners();
-                this.loadInitialData();
+            async init() {
+                this.setupTabs();
+                this.setupPostListeners();
+                await Promise.all([
+                    PostService.fetchInitialPosts(),
+                    UserService.fetchUsers()
+                ]);
+                this.updatePostView();
+                UserView.render(UserService.users);
             },
 
-            setupEventListeners() {
-                DOMView.addButton.addEventListener('click', () => this.handleAddItem());
-                DOMView.inputElement.addEventListener('keypress', (e) => {
+            setupTabs() {
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        btn.classList.add('active');
+                        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+                    });
+                });
+            },
+
+            setupPostListeners() {
+                PostView.addButton.addEventListener('click', () => this.handleAddItem());
+                PostView.inputElement.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') this.handleAddItem();
                 });
             },
 
-            async loadInitialData() {
-                await PostService.fetchInitialPosts();
-                this.updateView();
-            },
-
             handleAddItem() {
-                const title = DOMView.getInputValue();
+                const title = PostView.getInputValue();
                 if (!title) return alert('Por favor, digite algo!');
-                
                 PostService.addItem(title);
-                DOMView.clearInput();
-                this.updateView();
+                PostView.clearInput();
+                this.updatePostView();
             },
 
-            updateView() {
-                DOMView.render(PostService.items, this.viewActions);
+            updatePostView() {
+                PostView.render(PostService.items, this.viewActions);
             }
         };
 
