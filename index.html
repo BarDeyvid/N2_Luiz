@@ -140,8 +140,8 @@
     <div id="app">
         <!-- Tabs de navegação -->
         <div class="tabs">
-            <button class="tab-btn active" data-tab="posts">📄 Posts</button>
-            <button class="tab-btn" data-tab="users">👥 Usuários</button>
+            <button class="tab-btn active" data-tab="posts"> Posts</button>
+            <button class="tab-btn" data-tab="users"> Usuários</button>
         </div>
 
         <!-- Tab Posts -->
@@ -273,10 +273,10 @@
                     card.innerHTML = `
                         <span class="badge">ID ${user.id}</span>
                         <strong>${user.name}</strong>
-                        <p>📧 ${user.email}</p>
-                        <p>📞 ${user.phone}</p>
-                        <p>🌐 ${user.website}</p>
-                        <p>🏢 ${user.company.name}</p>
+                        <p>Email: ${user.email}</p>
+                        <p>Number: ${user.phone}</p>
+                        <p>Website: ${user.website}</p>
+                        <pCompany: ${user.company.name}</p>
                     `;
                     this.container.appendChild(card);
                 });
