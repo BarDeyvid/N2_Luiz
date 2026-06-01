@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Posts</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        h1 { text-align: center; color: var(--primary); }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        button {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn-add { background: var(--primary); color: white; }
+        .btn-add:hover { background: var(--primary-hover); }
+        .btn-edit { background: #e2e8f0; color: var(--text); }
+        .btn-edit:hover { background: #cbd5e1; }
+        .btn-delete { background: var(--danger); color: white; }
+        .btn-delete:hover { background: var(--danger-hover); }
+
+        ul { list-style: none; padding: 0; }
+
+        li {
+            background: var(--card);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            gap: 0.5rem;
+        }
+
+        .item-text { flex: 1; }
+        .actions { display: flex; gap: 0.25rem; }
+        .edit-input { flex: 1; }
+    </style>
+</head>
+<body>
+
+    <h1>Gerenciador de Posts</h1>
+    <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem;">
+        Integrantes: Deyvid Barcelos, Nathalia Bruch Machado dos Santos e Yann Felipe Bastos
+    </p>
+    
+    <div id="app">
+        <div class="input-group">
+            <input type="text" id="new-item" placeholder="Digite um novo título...">
+            <button id="add-item" class="btn-add">Adicionar</button>
+        </div>
+        <ul id="item-list"></ul>
+    </div>
+
+    <script>
+        const PostService = {
+            apiUrl: 'https://jsonplaceholder.typicode.com/posts',
+            items: [],
+
+            async fetchInitialPosts() {
+                try {
+                    const response = await fetch(this.apiUrl);
+                    if (!response.ok) throw new Error('Erro na requisição');
+                    const data = await response.json();
+                    
+                    this.items = data.slice(0, 10).map(post => ({
+                        id: post.id,
+                        title: post.title,
+                        isEditing: false 
+                    }));
+                } catch (error) {
+                    console.error('Erro ao buscar itens:', error);
+                    alert('Não foi possível carregar os dados da API.');
+                }
+            },
+
+            addItem(title) {
+                const newItem = { id: Date.now(), title, isEditing: false };
+                this.items.unshift(newItem); 
+            },
+
+            removeItem(id) {
+                this.items = this.items.filter(item => item.id !== id);
+            },
+
+            toggleEditMode(id) {
+                const item = this.items.find(item => item.id === id);
+                if (item) item.isEditing = !item.isEditing;
+            },
+
+            updateItemTitle(id, newTitle) {
+                const item = this.items.find(item => item.id === id);
+                if (item) {
+                    item.title = newTitle;
+                    item.isEditing = false;
+                }
+            }
+        };
+
+        const DOMView = {
+            listElement: document.getElementById('item-list'),
+            inputElement: document.getElementById('new-item'),
+            addButton: document.getElementById('add-item'),
+
+            getInputValue() {
+                return this.inputElement.value.trim();
+            },
+
+            clearInput() {
+                this.inputElement.value = '';
+            },
+
+            render(items, actions) {
+                this.listElement.innerHTML = '';
+
+                items.forEach(item => {
+                    const li = document.createElement('li');
+
+                    if (item.isEditing) {
+                        li.innerHTML = `
+                            <input type="text" class="edit-input" value="${item.title}">
+                            <div class="actions">
+                                <button class="btn-add save-btn">Salvar</button>
+                                <button class="btn-edit cancel-btn">Cancelar</button>
+                            </div>
+                        `;
+
+                        const input = li.querySelector('.edit-input');
+                        li.querySelector('.save-btn').onclick = () => actions.onSave(item.id, input.value.trim());
+                        li.querySelector('.cancel-btn').onclick = () => actions.onToggleEdit(item.id);
+                    } else {
+                        li.innerHTML = `
+                            <span class="item-text">${item.title}</span>
+                            <div class="actions">
+                                <button class="btn-edit edit-btn">Editar</button>
+                                <button class="btn-delete delete-btn">Remover</button>
+                            </div>
+                        `;
+
+                        li.querySelector('.edit-btn').onclick = () => actions.onToggleEdit(item.id);
+                        li.querySelector('.delete-btn').onclick = () => actions.onDelete(item.id);
+                    }
+
+                    this.listElement.appendChild(li);
+                });
+            }
+        };
+
+        const App = {
+            viewActions: {
+                onDelete: (id) => {
+                    PostService.removeItem(id);
+                    App.updateView();
+                },
+                onToggleEdit: (id) => {
+                    PostService.toggleEditMode(id);
+                    App.updateView();
+                },
+                onSave: (id, newTitle) => {
+                    if (!newTitle) return alert('O título não pode ser vazio!');
+                    PostService.updateItemTitle(id, newTitle);
+                    App.updateView();
+                }
+            },
+
+            init() {
+                this.setupEventListeners();
+                this.loadInitialData();
+            },
+
+            setupEventListeners() {
+                DOMView.addButton.addEventListener('click', () => this.handleAddItem());
+                DOMView.inputElement.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.handleAddItem();
+                });
+            },
+
+            async loadInitialData() {
+                await PostService.fetchInitialPosts();
+                this.updateView();
+            },
+
+            handleAddItem() {
+                const title = DOMView.getInputValue();
+                if (!title) return alert('Por favor, digite algo!');
+                
+                PostService.addItem(title);
+                DOMView.clearInput();
+                this.updateView();
+            },
+
+            updateView() {
+                DOMView.render(PostService.items, this.viewActions);
+            }
+        };
+
+        App.init();
+    </script>
+</body>
+</html>
